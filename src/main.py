@@ -224,6 +224,7 @@ def main():
                         can_visit.append(Direction.RIGHT)
 
                 if not can_visit:
+                    # update the move for the cell we came from to be an undo (backtrack)
                     match entry_dir:
                         case Direction.UP: maze.moves[y - 1][x][Direction.DOWN] = True
                         case Direction.DOWN: maze.moves[y + 1][x][Direction.UP] = True
@@ -232,12 +233,6 @@ def main():
                         
                     solve_stack.pop()
                     continue
-
-                # for direction in maze.moves[y][x]:
-                #     if direction in maze.moves[y][x]:
-                #         # If we already have an entry in the cell's move list then we must have
-                #         # backtracked.
-                #         maze.moves[y][x][direction] = True
 
                 direction = can_visit.pop()
                 maze.moves[y][x][direction] = False
