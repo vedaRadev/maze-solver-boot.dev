@@ -4,7 +4,8 @@ Warning: this code is pretty terrible. I just kind of hacked it together then le
 
 ## Setting Up
 1. Clone and `cd` into the repository.
-2. Run `pip install -r requirements.txt`.
+2. Run `python3 -m venv venv`
+3. Run `pip install -r requirements.txt`.
 
 ## Running (Linux/WSL)
 1. Run `source venv/bin/activate` (be sure to run `deactivate` when you're done running the maze solver)
