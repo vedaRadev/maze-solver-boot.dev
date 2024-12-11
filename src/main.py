@@ -1,34 +1,31 @@
 from tkinter import Tk, BOTH, Canvas
-from typing import Self
+from typing import Callable
 import time
 
 
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
+RUNNING = True
 
 class Window:
-    def __init__(self, width: int, height: int):
+    def __init__(self, width: int, height: int, on_close: Callable):
+        self._width = width
+        self._height = height
+
         self._root = Tk()
         self._root.title = "Maze Solver" # type: ignore
-        self._root.protocol("WM_DELETE_WINDOW", self.close)
+        self._root.protocol("WM_DELETE_WINDOW", on_close)
         self._canvas = Canvas(width = width, height = height)
         self._canvas.pack()
-        self._running = False
 
 
-    def redraw(self):
+    def process_events(self):
         self._root.update_idletasks()
         self._root.update()
 
 
-    def wait_for_close(self):
-        self._running = True
-        while self._running:
-            self.redraw()
-    
-
-    def close(self):
-        self._running = False
+    def clear_color(self, color: str):
+        self._canvas.create_rectangle(0, 0, self._width, self._height, fill = color)
     
 
     def draw_line(self, x1: int, y1: int, x2: int, y2: int, fill_color: str):
@@ -108,24 +105,29 @@ class Maze:
                 cell.draw(window, "red", tl_x, tl_y, br_x, br_y)
 
     
-    # def animate(self, window: Window):
-    #     window.redraw()
-    #     time.sleep(0.05)
+def on_window_close():
+    global RUNNING
+    RUNNING = False
 
 
 def main():
-    window = Window(SCREEN_WIDTH, SCREEN_HEIGHT)
+    global RUNNING
+    global SCREEN_WIDTH
+    global SCREEN_HEIGHT
+
+    window = Window(SCREEN_WIDTH, SCREEN_HEIGHT, on_window_close)
 
     # TODO math to center the maze on the screen
     cell_size = 50
     maze_offset = 10
     num_rows = (SCREEN_HEIGHT - maze_offset) // cell_size
     num_cols = (SCREEN_WIDTH - maze_offset) // cell_size
-
     maze = Maze(maze_offset, maze_offset, num_rows, num_cols, cell_size, cell_size)
-    maze.draw_cells(window)
-
-    window.wait_for_close()
+    while RUNNING:
+        window.process_events()
+        window.clear_color("black")
+        maze.draw_cells(window)
+        time.sleep(0.05)
 
 
 if __name__ == "__main__":
