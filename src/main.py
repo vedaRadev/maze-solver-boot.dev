@@ -1,37 +1,7 @@
-from tkinter import Tk, BOTH, Canvas
-from typing import Callable
 from enum import Enum
+import pygame
 import time
 import random
-
-
-SCREEN_WIDTH = 800
-SCREEN_HEIGHT = 600
-RUNNING = True
-
-
-class Window:
-    def __init__(self, width: int, height: int, on_close: Callable):
-        self._width = width
-        self._height = height
-        self._root = Tk()
-        self._root.title = "Maze Solver" # type: ignore
-        self._root.protocol("WM_DELETE_WINDOW", on_close)
-        self._canvas = Canvas(width = width, height = height)
-        self._canvas.pack()
-
-
-    def process_events(self):
-        self._root.update_idletasks()
-        self._root.update()
-
-
-    def clear_color(self, color: str):
-        self._canvas.create_rectangle(0, 0, self._width, self._height, fill = color)
-    
-
-    def draw_line(self, x1: int, y1: int, x2: int, y2: int, fill_color: str):
-        self._canvas.create_line(x1, y1, x2, y2, fill = fill_color, width = 2)
 
 
 class Cell:
@@ -43,15 +13,15 @@ class Cell:
         self.has_bottom_wall = True
     
 
-    def draw(self, window: Window, color: str, x1: int, y1: int, x2: int, y2: int):
+    def draw(self, screen: pygame.Surface, color: str, x1: int, y1: int, x2: int, y2: int):
         if self.has_left_wall:
-            window.draw_line(x1, y1, x1, y2, color)
+            pygame.draw.line(screen, color, (x1, y1), (x1, y2))
         if self.has_right_wall:
-            window.draw_line(x2, y1, x2, y2, color)
+            pygame.draw.line(screen, color, (x2, y1), (x2, y2))
         if self.has_top_wall:
-            window.draw_line(x1, y1, x2, y1, color)
+            pygame.draw.line(screen, color, (x1, y1), (x2, y1))
         if self.has_bottom_wall:
-            window.draw_line(x1, y2, x2, y2, color)
+            pygame.draw.line(screen, color, (x1, y2), (x2, y2))
 
 
 class Maze:
@@ -87,7 +57,7 @@ class Maze:
         return (cell_topleft_x, cell_topleft_y, cell_bottomright_x, cell_bottomright_y)
     
 
-    def draw_move(self, window: Window, a_row: int, a_col: int, b_row: int, b_col: int, is_undo = False):
+    def draw_move(self, screen: pygame.Surface, a_row: int, a_col: int, b_row: int, b_col: int, is_undo = False):
         color = "gray" if is_undo else "red"
         a_tl_x, a_tl_y, a_br_x, a_br_y = self.get_cell_screen_coords(a_row, a_col)
         a_center_x = (a_tl_x + a_br_x) // 2
@@ -97,22 +67,17 @@ class Maze:
         b_center_x = (b_tl_x + b_br_x) // 2
         b_center_y = (b_tl_y + b_br_y) // 2
 
-        window.draw_line(a_center_x, a_center_y, b_center_x, b_center_y, color)
+        pygame.draw.line(screen, color, (a_center_x, a_center_y), (b_center_x, b_center_y))
 
 
-    def draw_cells(self, window: Window):
+    def draw_cells(self, screen: pygame.Surface):
         for r in range(self.num_rows):
             for c in range(self.num_cols):
                 cell = self.cells[r][c]
                 tl_x, tl_y, br_x, br_y = self.get_cell_screen_coords(r, c)
-                cell.draw(window, "green", tl_x, tl_y, br_x, br_y)
+                cell.draw(screen, "green", tl_x, tl_y, br_x, br_y)
 
     
-def on_window_close():
-    global RUNNING
-    RUNNING = False
-
-
 class SimulationState(Enum):
     BEGIN = "begin"
     BREAKING_ENTRANCE = "breaking entrance"
@@ -129,13 +94,12 @@ class Direction(Enum):
 
 
 def main():
-    global RUNNING
-    global SCREEN_WIDTH
-    global SCREEN_HEIGHT
+    SCREEN_WIDTH = 800
+    SCREEN_HEIGHT = 600
 
     random.seed(None)
 
-    window = Window(SCREEN_WIDTH, SCREEN_HEIGHT, on_window_close)
+    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 
     # TODO math to center the maze on the screen
     cell_size = 50
@@ -147,9 +111,10 @@ def main():
     # start at top-right, perform DFS using this stack to generate the maze
     gen_stack = [((0, 0), [])]
     current_state = SimulationState.BEGIN
-    while RUNNING:
-        window.process_events()
-        window.clear_color("black")
+    while True:
+        for events in pygame.event.get():
+            if events.type == pygame.QUIT:
+                return
 
         # TODO cleaner state machine implementation
         match current_state:
@@ -225,8 +190,12 @@ def main():
             case SimulationState.DONE:
                 pass # maze solved, nothing to do
 
-        maze.draw_cells(window)
-        time.sleep(0.05)
+        screen.fill("black")
+        maze.draw_cells(screen)
+        pygame.display.flip()
+        # FIXME sleeping the thread means we might miss events such as the user clicking the
+        # window's close button!
+        time.sleep(0.03)
 
 
 if __name__ == "__main__":
