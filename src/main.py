@@ -24,6 +24,13 @@ class Cell:
             pygame.draw.line(screen, color, (x1, y2), (x2, y2))
 
 
+class Direction(Enum):
+    UP = "up"
+    RIGHT = "right"
+    DOWN = "down"
+    LEFT = "left"
+
+
 class Maze:
     def __init__(
         self,
@@ -37,15 +44,15 @@ class Maze:
         self.num_cols = num_cols
         self.cell_width = cell_width
         self.cell_height = cell_height
-        self.generate_cells()
 
-
-    def generate_cells(self):
         self.cells = []
+        self.moves = []
         for y in range(self.num_rows):
             self.cells.append([])
+            self.moves.append([])
             for _ in range(self.num_cols):
                 self.cells[y].append(Cell())
+                self.moves[y].append({})
 
 
     # TODO check that the row, col pair is in bounds of the cells matrix
@@ -58,7 +65,7 @@ class Maze:
     
 
     def draw_move(self, screen: pygame.Surface, a_row: int, a_col: int, b_row: int, b_col: int, is_undo = False):
-        color = "gray" if is_undo else "red"
+        color = "red" if is_undo else "blue"
         a_tl_x, a_tl_y, a_br_x, a_br_y = self.get_cell_screen_coords(a_row, a_col)
         a_center_x = (a_tl_x + a_br_x) // 2
         a_center_y = (a_tl_y + a_br_y) // 2
@@ -77,20 +84,22 @@ class Maze:
                 tl_x, tl_y, br_x, br_y = self.get_cell_screen_coords(r, c)
                 cell.draw(screen, "green", tl_x, tl_y, br_x, br_y)
 
+                for direction in self.moves[r][c]:
+                    is_undo = self.moves[r][c][direction]
+                    match direction:
+                        case Direction.UP: self.draw_move(screen, r, c, r - 1, c, is_undo)
+                        case Direction.RIGHT: self.draw_move(screen, r, c, r, c + 1, is_undo)
+                        case Direction.DOWN: self.draw_move(screen, r, c, r + 1, c, is_undo)
+                        case Direction.LEFT: self.draw_move(screen, r, c, r, c - 1, is_undo)
+
     
 class SimulationState(Enum):
     BEGIN = "begin"
     BREAKING_ENTRANCE = "breaking entrance"
     BREAKING_EXIT = "breaking exit"
     GENERATING_MAZE = "generating_maze"
+    SOLVING = "solving"
     DONE = "done"
-
-
-class Direction(Enum):
-    UP = 0
-    RIGHT = 1
-    DOWN = 2
-    LEFT = 3
 
 
 def main():
@@ -102,7 +111,7 @@ def main():
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 
     # TODO math to center the maze on the screen
-    cell_size = 50
+    cell_size = 25
     maze_offset = 10
     num_rows = (SCREEN_HEIGHT - maze_offset) // cell_size
     num_cols = (SCREEN_WIDTH - maze_offset) // cell_size
@@ -110,6 +119,8 @@ def main():
 
     # start at top-right, perform DFS using this stack to generate the maze
     gen_stack = [((0, 0), [])]
+    # current_point, from_direction, can_visit
+    solve_stack: list[tuple[tuple[int, int], Direction | None, list[Direction]]] = [((0, 0), None, [])]
     current_state = SimulationState.BEGIN
     while True:
         for events in pygame.event.get():
@@ -133,15 +144,17 @@ def main():
 
             case SimulationState.GENERATING_MAZE:
                 if not gen_stack:
+                    # prep for solving
                     for row in maze.cells:
                         for cell in row:
                             cell.visited = False
-                    current_state = SimulationState.DONE
+                    current_state = SimulationState.SOLVING
                     continue
 
                 (x, y), can_visit = gen_stack[-1]
-                if not maze.cells[y][x].visited:
-                    maze.cells[y][x].visited = True
+                cell = maze.cells[y][x]
+                if not cell.visited:
+                    cell.visited = True
                     if y - 1 >= 0 and not maze.cells[y - 1][x].visited:
                         can_visit.append(Direction.UP)
                     if y + 1 < maze.num_rows and not maze.cells[y + 1][x].visited:
@@ -161,31 +174,78 @@ def main():
                         next_x = x
                         next_y = y - 1
                         if maze.cells[next_y][next_x].visited: continue
-                        maze.cells[y][x].has_top_wall = False
+                        cell.has_top_wall = False
                         maze.cells[next_y][next_x].has_bottom_wall = False
                         gen_stack.append(((next_x, next_y), []))
                     case Direction.RIGHT:
                         next_x = x + 1
                         next_y = y
                         if maze.cells[next_y][next_x].visited: continue
-                        maze.cells[y][x].has_right_wall = False
+                        cell.has_right_wall = False
                         maze.cells[next_y][next_x].has_left_wall = False
                         gen_stack.append(((next_x, next_y), []))
                     case Direction.DOWN:
                         next_x = x
                         next_y = y + 1
                         if maze.cells[next_y][next_x].visited: continue
-                        maze.cells[y][x].has_bottom_wall = False
+                        cell.has_bottom_wall = False
                         maze.cells[next_y][next_x].has_top_wall = False
                         gen_stack.append(((next_x, next_y), []))
                     case Direction.LEFT:
                         next_x = x - 1
                         next_y = y
                         if maze.cells[next_y][next_x].visited: continue
-                        maze.cells[y][x].has_left_wall = False
+                        cell.has_left_wall = False
                         maze.cells[next_y][next_x].has_right_wall = False
                         gen_stack.append(((next_x, next_y), []))
 
+            case SimulationState.SOLVING:
+                if not solve_stack:
+                    current_state = SimulationState.DONE
+                    continue
+
+                (x, y), entry_dir, can_visit = solve_stack[-1]
+                if x == maze.num_cols - 1 and y == maze.num_rows - 1:
+                    # solved
+                    solve_stack = []
+                    current_state = SimulationState.DONE
+                    continue
+
+                cell = maze.cells[y][x]
+                if not cell.visited:
+                    cell.visited = True
+                    if not cell.has_top_wall and y - 1 >= 0 and not maze.cells[y - 1][x].visited:
+                        can_visit.append(Direction.UP)
+                    if not cell.has_bottom_wall and y + 1 < maze.num_rows and not maze.cells[y + 1][x].visited:
+                        can_visit.append(Direction.DOWN)
+                    if not cell.has_left_wall and x - 1 >= 0 and not maze.cells[y][x - 1].visited:
+                        can_visit.append(Direction.LEFT)
+                    if not cell.has_right_wall and x + 1 < maze.num_cols and not maze.cells[y][x + 1].visited:
+                        can_visit.append(Direction.RIGHT)
+
+                if not can_visit:
+                    match entry_dir:
+                        case Direction.UP: maze.moves[y - 1][x][Direction.DOWN] = True
+                        case Direction.DOWN: maze.moves[y + 1][x][Direction.UP] = True
+                        case Direction.LEFT: maze.moves[y][x - 1][Direction.RIGHT] = True
+                        case Direction.RIGHT: maze.moves[y][x + 1][Direction.LEFT] = True
+                        
+                    solve_stack.pop()
+                    continue
+
+                # for direction in maze.moves[y][x]:
+                #     if direction in maze.moves[y][x]:
+                #         # If we already have an entry in the cell's move list then we must have
+                #         # backtracked.
+                #         maze.moves[y][x][direction] = True
+
+                direction = can_visit.pop()
+                maze.moves[y][x][direction] = False
+                match direction:
+                    case Direction.UP: solve_stack.append(((x, y - 1), Direction.DOWN, []))
+                    case Direction.RIGHT: solve_stack.append(((x + 1, y), Direction.LEFT, []))
+                    case Direction.DOWN: solve_stack.append(((x, y + 1), Direction.UP, []))
+                    case Direction.LEFT: solve_stack.append(((x - 1, y), Direction.RIGHT, []))
 
             case SimulationState.DONE:
                 pass # maze solved, nothing to do
@@ -195,7 +255,7 @@ def main():
         pygame.display.flip()
         # FIXME sleeping the thread means we might miss events such as the user clicking the
         # window's close button!
-        time.sleep(0.03)
+        time.sleep(0.01)
 
 
 if __name__ == "__main__":

@@ -1,3 +1,7 @@
+For boot.dev.
+
+Warning: this code is pretty terrible. I just kind of hacked it together then left it to die.
+
 ## Setting Up
 1. Clone and `cd` into the repository.
 2. Run `pip install -r requirements.txt`.
