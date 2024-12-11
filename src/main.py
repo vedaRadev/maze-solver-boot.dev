@@ -1,4 +1,5 @@
 from tkinter import Tk, BOTH, Canvas
+from typing import Self
 
 
 class Window:
@@ -53,36 +54,39 @@ class Cell:
             window.draw_line(self.__x1, self.__y2, self.__x2, self.__y2, color)
 
 
+    # TODO not a big fan of this API.
+    # Maybe attach move drawing to the window class or just make it a standalone function?
+    def draw_move(self, window: Window, other: Self, is_undo = False):
+        color = "gray" if is_undo else "red"
+        self_center_x = (self.__x1 + self.__x2) // 2
+        self_center_y = (self.__y1 + self.__y2) // 2
+        other_center_x = (other.__x1 + other.__x2) // 2
+        other_center_y = (other.__y1 + other.__y2) // 2
+        window.draw_line(self_center_x, self_center_y, other_center_x, other_center_y, color)
+
+
 
 def main():
-    win = Window(800, 600)
-    win.draw_line(0, 0, 800, 600, "red")
+    window = Window(800, 600)
+    window.draw_line(0, 0, 800, 600, "red")
 
     cell_width = 30
     cell_height = 30
-    topleft_x = 200
-    topleft_y = 100
 
-    cell = Cell(topleft_x, topleft_y, topleft_x + cell_width, topleft_y + cell_height)
-    cell.has_right_wall = False
-    cell.draw(win, "red")
-    topleft_x += cell_width + 5
+    tl_x = 100
+    tl_y = 100
+    cell1 = Cell(tl_x, tl_y, tl_x + cell_width, tl_y + cell_height)
 
-    cell = Cell(topleft_x, topleft_y, topleft_x + cell_width, topleft_y + cell_height)
-    cell.draw(win, "red")
-    topleft_x += cell_width + 5
+    tl_x = 100
+    tl_y = 200
+    cell2 = Cell(tl_x, tl_y, tl_x + cell_width, tl_y + cell_height)
 
-    cell = Cell(topleft_x, topleft_y, topleft_x + cell_width, topleft_y + cell_height)
-    cell.draw(win, "red")
-    topleft_x += cell_width + 5
+    cell1.draw(window, "blue")
+    cell2.draw(window, "blue")
+    cell1.draw_move(window, cell2)
 
-    cell = Cell(topleft_x, topleft_y, topleft_x + cell_width, topleft_y + cell_height)
-    cell.has_top_wall = False
-    cell.has_right_wall = False
-    cell.draw(win, "red")
-    topleft_x += cell_width + 5
+    window.wait_for_close()
 
-    win.wait_for_close()
 
 if __name__ == "__main__":
     main()
