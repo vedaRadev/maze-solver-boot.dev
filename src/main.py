@@ -1,7 +1,8 @@
 from tkinter import Tk, BOTH, Canvas
 from typing import Callable
-import time
 from enum import Enum
+import time
+import random
 
 
 SCREEN_WIDTH = 800
@@ -35,6 +36,7 @@ class Window:
 
 class Cell:
     def __init__(self):
+        self.visited = False
         self.has_left_wall = True
         self.has_right_wall = True
         self.has_top_wall = True
@@ -103,7 +105,7 @@ class Maze:
             for c in range(self.num_cols):
                 cell = self.cells[r][c]
                 tl_x, tl_y, br_x, br_y = self.get_cell_screen_coords(r, c)
-                cell.draw(window, "red", tl_x, tl_y, br_x, br_y)
+                cell.draw(window, "green", tl_x, tl_y, br_x, br_y)
 
     
 def on_window_close():
@@ -113,15 +115,25 @@ def on_window_close():
 
 class SimulationState(Enum):
     BEGIN = "begin"
-    BREAKING_ENTRANCE = "breaking entrance",
-    BREAKING_EXIT = "breaking exit",
+    BREAKING_ENTRANCE = "breaking entrance"
+    BREAKING_EXIT = "breaking exit"
+    GENERATING_MAZE = "generating_maze"
     DONE = "done"
+
+
+class Direction(Enum):
+    UP = 0
+    RIGHT = 1
+    DOWN = 2
+    LEFT = 3
 
 
 def main():
     global RUNNING
     global SCREEN_WIDTH
     global SCREEN_HEIGHT
+
+    random.seed(None)
 
     window = Window(SCREEN_WIDTH, SCREEN_HEIGHT, on_window_close)
 
@@ -131,6 +143,9 @@ def main():
     num_rows = (SCREEN_HEIGHT - maze_offset) // cell_size
     num_cols = (SCREEN_WIDTH - maze_offset) // cell_size
     maze = Maze(maze_offset, maze_offset, num_rows, num_cols, cell_size, cell_size)
+
+    # start at top-right, perform DFS using this stack to generate the maze
+    gen_stack = [((0, 0), [])]
     current_state = SimulationState.BEGIN
     while RUNNING:
         window.process_events()
@@ -149,6 +164,63 @@ def main():
 
             case SimulationState.BREAKING_EXIT:
                 maze.cells[maze.num_rows - 1][maze.num_cols - 1].has_bottom_wall = False
+                current_state = SimulationState.GENERATING_MAZE
+
+            case SimulationState.GENERATING_MAZE:
+                if not gen_stack:
+                    for row in maze.cells:
+                        for cell in row:
+                            cell.visited = False
+                    current_state = SimulationState.DONE
+                    continue
+
+                (x, y), can_visit = gen_stack[-1]
+                if not maze.cells[y][x].visited:
+                    maze.cells[y][x].visited = True
+                    if y - 1 >= 0 and not maze.cells[y - 1][x].visited:
+                        can_visit.append(Direction.UP)
+                    if y + 1 < maze.num_rows and not maze.cells[y + 1][x].visited:
+                        can_visit.append(Direction.DOWN)
+                    if x - 1 >= 0 and not maze.cells[y][x - 1].visited:
+                        can_visit.append(Direction.LEFT)
+                    if x + 1 < maze.num_cols and not maze.cells[y][x + 1].visited:
+                        can_visit.append(Direction.RIGHT)
+
+                # we've exhausted all possible directions
+                if not can_visit:
+                    gen_stack.pop()
+                    continue
+
+                match can_visit.pop(random.randrange(0, len(can_visit))):
+                    case Direction.UP:
+                        next_x = x
+                        next_y = y - 1
+                        if maze.cells[next_y][next_x].visited: continue
+                        maze.cells[y][x].has_top_wall = False
+                        maze.cells[next_y][next_x].has_bottom_wall = False
+                        gen_stack.append(((next_x, next_y), []))
+                    case Direction.RIGHT:
+                        next_x = x + 1
+                        next_y = y
+                        if maze.cells[next_y][next_x].visited: continue
+                        maze.cells[y][x].has_right_wall = False
+                        maze.cells[next_y][next_x].has_left_wall = False
+                        gen_stack.append(((next_x, next_y), []))
+                    case Direction.DOWN:
+                        next_x = x
+                        next_y = y + 1
+                        if maze.cells[next_y][next_x].visited: continue
+                        maze.cells[y][x].has_bottom_wall = False
+                        maze.cells[next_y][next_x].has_top_wall = False
+                        gen_stack.append(((next_x, next_y), []))
+                    case Direction.LEFT:
+                        next_x = x - 1
+                        next_y = y
+                        if maze.cells[next_y][next_x].visited: continue
+                        maze.cells[y][x].has_left_wall = False
+                        maze.cells[next_y][next_x].has_right_wall = False
+                        gen_stack.append(((next_x, next_y), []))
+
 
             case SimulationState.DONE:
                 pass # maze solved, nothing to do
