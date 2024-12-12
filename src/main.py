@@ -108,20 +108,20 @@ def main():
 
     random.seed(None)
 
+    pygame.display.set_caption("Maze Solver")
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 
     # TODO math to center the maze on the screen
+    # TODO recalculate if window size changes (or just stretch image to fit screen)
     cell_size = 25
     maze_offset = 10
     num_rows = (SCREEN_HEIGHT - maze_offset) // cell_size
     num_cols = (SCREEN_WIDTH - maze_offset) // cell_size
-    maze = Maze(maze_offset, maze_offset, num_rows, num_cols, cell_size, cell_size)
 
-    # start at top-right, perform DFS using this stack to generate the maze
-    gen_stack = [((0, 0), [])]
-    # current_point, from_direction, can_visit
-    solve_stack: list[tuple[tuple[int, int], Direction | None, list[Direction]]] = [((0, 0), None, [])]
+    # pyright is being really annoying here
+    maze: Maze = None # type: ignore
     current_state = SimulationState.BEGIN
+    counter = 0
     while True:
         for events in pygame.event.get():
             if events.type == pygame.QUIT:
@@ -131,6 +131,12 @@ def main():
         match current_state:
 
             case SimulationState.BEGIN:
+                counter = 0
+                maze = Maze(maze_offset, maze_offset, num_rows, num_cols, cell_size, cell_size)
+                # start at top-right, perform DFS using this stack to generate the maze
+                gen_stack = [((0, 0), [])]
+                # current_point, from_direction, can_visit
+                solve_stack: list[tuple[tuple[int, int], Direction | None, list[Direction]]] = [((0, 0), None, [])]
                 # just for leaving one frame before breaking
                 current_state = SimulationState.BREAKING_ENTRANCE
 
@@ -143,7 +149,7 @@ def main():
                 current_state = SimulationState.GENERATING_MAZE
 
             case SimulationState.GENERATING_MAZE:
-                if not gen_stack:
+                if not gen_stack: # type: ignore
                     # prep for solving
                     for row in maze.cells:
                         for cell in row:
@@ -200,7 +206,7 @@ def main():
                         gen_stack.append(((next_x, next_y), []))
 
             case SimulationState.SOLVING:
-                if not solve_stack:
+                if not solve_stack: # type: ignore
                     current_state = SimulationState.DONE
                     continue
 
@@ -243,7 +249,11 @@ def main():
                     case Direction.LEFT: solve_stack.append(((x - 1, y), Direction.RIGHT, []))
 
             case SimulationState.DONE:
-                pass # maze solved, nothing to do
+                # TODO use pygame's clock and actually measure time in seconds or milliseconds
+                # then just reset to BEGIN after like 1 or 2 seconds after solving
+                counter += 1
+                if counter > 100:
+                    current_state = SimulationState.BEGIN
 
         screen.fill("black")
         maze.draw_cells(screen)
